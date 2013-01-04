@@ -41,29 +41,33 @@ module Webmachine
       def finish_request(*args)
         proxy_callback :finish_request, *args
       ensure
-        resource.response.headers['X-Webmachine-Trace-Id'] = object_id.to_s
-        Trace.record(object_id.to_s, resource.response.trace)
+        resource.response.headers['X-Webmachine-Trace-Id'] = trace_id
+        Trace.record(trace_id, resource.response.trace)
       end
 
       private
       # Proxy a given callback to the inner resource, decorating with traces
       def proxy_callback(callback, *args)
         # Log inputs and attempt
-        resource.response.trace << attempt(callback, args)
+        Webmachine::Events.publish('wm.trace.attempt', attempt(callback, args))
         # Do the call
         _result = resource.send(callback, *args)
         add_dynamic_callback_proxies(_result) if CALLBACK_REFERRERS.include?(callback.to_sym)
-        resource.response.trace << result(_result)
+        Webmachine::Events.publish('wm.trace.result', result(_result))
         _result
       rescue => exc
         exc.backtrace.reject! {|s| s.include?(__FILE__) }
-        resource.response.trace << exception(exc)
+        Webmachine::Events.publish('wm.trace.exception', exception(exc))
         raise
+      end
+
+      def trace_id
+        object_id.to_s
       end
 
       # Creates a log entry for the entry to a resource callback.
       def attempt(callback, args)
-        log = {:type => :attempt}
+        log = {:type => :attempt, :trace_id => trace_id}
         method = resource.method(callback)
         if method.owner == ::Webmachine::Resource::Callbacks
           log[:name] = "(default)##{method.name}"
@@ -79,12 +83,13 @@ module Webmachine
 
       # Creates a log entry for the result of a resource callback
       def result(result)
-        {:type => :result, :value => result}
+        {:type => :result, :trace_id => trace_id, :value => result}
       end
 
       # Creates a log entry for an exception that was raised from a callback
       def exception(e)
         {:type => :exception,
+          :trace_id => trace_id,
           :class => e.class.name,
           :backtrace => e.backtrace,
           :message => e.message }
