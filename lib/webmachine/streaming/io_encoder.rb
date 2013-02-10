@@ -30,6 +30,11 @@ module Webmachine
         end
       end
 
+      # Returns the raw IO object.
+      def to_io
+        body
+      end
+
       # Returns the length of the IO stream, if known. Returns nil if
       # the stream uses an encoder or charsetter that might modify the
       # length of the stream, or the stream size is unknown.

@@ -45,6 +45,12 @@ module Webmachine
                             resource.send(encoder, resource.send(charsetter, body))
                           end
                         end
+        if request.range
+          range_request = RangeRequest.new(request.range, response.body.size)
+          range_encoder = RangeEncoder.new(range_request, response.body)
+
+          range_encoder.prepare_response(response)
+        end
         if body_is_fixed_length?
           set_content_length
         else
